@@ -1,0 +1,5 @@
+# CodeRabbit settings: skip the generated opening data (big, not hand-written)
+reviews:
+  path_filters:
+    - "!js/lichess.js"
+    - "!js/openings.js"
