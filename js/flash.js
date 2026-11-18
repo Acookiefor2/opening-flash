@@ -5,9 +5,10 @@ function moveText(m){ return moveListHTML(m); }
 /* ---------- settings ---------- */
 const S={mode:"name",set:"popular",time:10,pool:"all",len:25,voice:"off"};
 function seg(id,key){
-  $(id).querySelectorAll("button").forEach(b=>b.onclick=()=>{
-    $(id).querySelectorAll("button").forEach(x=>x.classList.remove("sel"));
-    b.classList.add("sel"); S[key]= ["pool","voice","mode","set"].includes(key) ? b.dataset.v : +b.dataset.v;
+  const btns=[...$(id).querySelectorAll("button")];
+  btns.forEach(b=>b.setAttribute("aria-pressed", b.classList.contains("sel")?"true":"false"));   // screen readers: which one is on
+  btns.forEach(b=>b.onclick=()=>{
+    btns.forEach(x=>{ x.classList.toggle("sel",x===b); x.setAttribute("aria-pressed",x===b?"true":"false"); }); S[key]= ["pool","voice","mode","set"].includes(key) ? b.dataset.v : +b.dataset.v;
     if(key==="voice") voiceChosen();
     if(key==="set") setChosen();
     if(key==="mode") modeChosen();
@@ -19,11 +20,13 @@ function showCounts(set){
   $("cAll").textContent=set.list.length.toLocaleString();
 }
 showCounts(getSet("popular"));
+let setGen=0;
 function setChosen(){
-  $("setNote").textContent = S.set==="lichess" ? "Loading the Lichess openings…" : "";
-  ensureSet(S.set).then(set=>{ showCounts(set);
+  const g=++setGen, want=S.set;
+  $("setNote").textContent = want==="lichess" ? "Loading the Lichess openings…" : "";
+  ensureSet(want).then(set=>{ if(g!==setGen) return; showCounts(set);
     $("setNote").textContent = S.set==="lichess" ? "Full names from the Lichess database. Naming a shorter part of the name (like \"Najdorf\" for \"Najdorf Variation, English Attack\") gets half a point." : "";
-  }).catch(err=>{ $("setNote").textContent="⚠ "+err.message+". Check your internet connection."; });
+  }).catch(err=>{ if(g===setGen) $("setNote").textContent="⚠ "+err.message+". Check your internet connection."; });
 }
 const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
 if(!SR){ $("vBrowser").disabled=true; $("vBrowser").title="Not supported in this browser"; $("vBrowser").style.opacity=.4; }
@@ -71,28 +74,37 @@ const fmtScore=x=>(Math.round(x*10)/10).toString();
 
 $("btnStart").onclick=startRun;
 $("btnAgain").onclick=()=>{ show("start"); $("stats").style.display="none"; if(S.mode==="name" && S.voice==="whisper") startMicTest(); };
+let startGen=0;
 function startRun(){
+  const g=++startGen;
+  const opts={mode:S.mode, voice:S.voice, set:S.set, pool:S.pool, len:S.len};   // the settings as they were when you clicked
   stopVoice(); whisperStop(); stopMicTest();
-  if(S.mode==="name" && S.voice==="whisper") whisperPrime();   // must happen inside this click, or the browser keeps audio switched off
+  if(opts.mode==="name" && opts.voice==="whisper") whisperPrime();   // must happen inside this click, or the browser keeps audio switched off
   const btn=$("btnStart"); btn.disabled=true;
-  ensureSet(S.set).then(set=>{ btn.disabled=false; beginRun(set); })
-    .catch(err=>{ btn.disabled=false; $("setNote").textContent="⚠ "+err.message+". Check your internet connection."; });
+  ensureSet(opts.set).then(set=>{
+    btn.disabled=false;
+    if(g!==startGen || currentPage!=="flash"){ whisperStop(); return; }   // you left or started again: release the mic
+    beginRun(set,opts);
+  }).catch(err=>{ btn.disabled=false; whisperStop(); if(g===startGen) $("setNote").textContent="⚠ "+err.message+". Check your internet connection."; });
 }
-function beginRun(set){
-  let pool = S.pool==="main" ? set.list.filter(o=>o.name===o.family) : set.list.slice();
-  deck = shuffle(pool); if(S.len && S.len<deck.length) deck=deck.slice(0,S.len);
+function beginRun(set,opts){
+  let pool = opts.pool==="main" ? set.list.filter(o=>o.name===o.family) : set.list.slice();
+  // Name it: Lichess uses some names for several lines; ask each name only once
+  if(opts.mode==="name"){ const seenN=new Set(); pool=pool.filter(o=>!seenN.has(o.nkey) && seenN.add(o.nkey)); }
+  deck = shuffle(pool); if(opts.len && opts.len<deck.length) deck=deck.slice(0,opts.len);
   idx=0; score=0; streak=0; bestStreak=0; nGood=0; nHalf=0; times=[]; review=[];
   rbStats={perfect:0, firstTry:0, total:0, hints:0, mistakes:0};
-  runMode=S.mode;
+  runMode=opts.mode;
   $("stats").style.display="flex";
   if(runMode==="rebuild"){ show("rgame"); return nextR(); }
   show("game");
-  if(S.voice==="browser") startVoice(); else if(S.voice==="whisper") whisperStart();
+  if(opts.voice==="browser") startVoice(); else if(opts.voice==="whisper") whisperStart();
   nextQ();
 }
 // leave a run cleanly (used when you switch to Study/Rebuild in the top bar)
 function abortRun(){
-  if(state==="idle") return;
+  startGen++;                          // cancels a run that's still loading
+  if(state==="idle"){ whisperStop(); return; }
   state="idle"; cancelAnimationFrame(raf); clearTimeout(graceTimer);
   stopVoice(); whisperStop(); rbs=null; rBoard.setInteractive(false);
   show("start"); $("stats").style.display="none";
@@ -126,10 +138,10 @@ function tick(){
   if($("optFlash").checked && frac<.5) $("board").classList.add("hidden");
   if(state!=="play") return;
   if(left<=0){
-    // voice: if you were mid-word when time ran out, give the recogniser a moment to finish
-    if(rec && speaking){ state="grace"; graceTimer=setTimeout(()=>{ if(state==="grace") finish(gotHalf?"half":"bad"); },1200); return; }
+    // browser voice: you started talking in time and it hasn't sent the final words yet
+    if(browserVoicePending()){ state="grace"; graceTimer=setTimeout(()=>{ if(state==="grace") finish(gotHalf?"half":"bad"); },1500); return; }
     // Whisper: you started talking in time, so wait for it to finish understanding you
-    if(W.on && ((W.speaking && W.uttQ===qSeq) || W.pendingFor(qSeq))){ state="grace"; micStatus(`<span class="dot"></span>time's up, finishing what you said…`);
+    if(whisperPending()){ state="grace"; micStatus(`<span class="dot"></span>time's up, finishing what you said…`);
       graceTimer=setTimeout(()=>{ if(state==="grace") finish(gotHalf?"half":"bad"); },8000); return; }
     return finish(gotHalf?"half":"bad");
   }
@@ -145,9 +157,17 @@ function tryAnswer(text, fromVoice){
   if(!fromVoice){ const a=$("ans"); a.classList.remove("shake"); void a.offsetWidth; a.classList.add("shake"); a.select(); }
   return false;
 }
+// spoken answers (browser voice and Whisper): "not Caro-Kann" must never count as Caro-Kann,
+// so remove negated parts before trying the last few words on their own
+function voiceAnswer(text){
+  const w=stripNegation(text).trim().split(/\s+/).filter(Boolean);
+  for(let k=Math.min(w.length,6);k>=1;k--){ if(tryAnswer(w.slice(-k).join(" "),true)) return true; }
+  return false;
+}
 $("ans").addEventListener("keydown",e=>{
   if(e.key==="Enter"){ e.preventDefault();
-    if(state==="play"||state==="grace"){ if(e.target.value.trim()) tryAnswer(e.target.value,false); }
+    // typed answers must be in before the timer runs out (the grace period is only for voice)
+    if(state==="play" && performance.now()<deadline){ if(e.target.value.trim()) tryAnswer(e.target.value,false); }
     else if(state==="done") nextQ();
   }
 });
@@ -176,7 +196,7 @@ function finish(res, gaveUp){
     v.className="verdict on bad"; v.innerHTML=`${gaveUp?"Skipped":"Time's up"}. It was<b>${cur.name}</b>${mv}`;
     review.push({o:cur,you:bestTry||typed});
   }
-  updStats(); idx++;
+  idx++; updStats();
   setTimeout(()=>{ $("ans").blur(); },0);
 }
 
@@ -192,6 +212,7 @@ function nextR(){
   rBoard.set(cur.fen,{last:cur.last});
   const mv=$("rMoves"); mv.innerHTML=moveText(cur.moves); mv.classList.toggle("hide",!$("optMoves").checked);
   $("rMem").style.display=""; $("rPlay").style.display="none"; $("rNext").style.display="none";
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur();   // a hidden button mustn't keep the keyboard
   $("rTimer").style.visibility="visible";
   updStats();
   state="memorize"; t0=performance.now(); deadline=t0+S.time*1000;
@@ -225,6 +246,7 @@ function finishR(s){
   else { streak=0; review.push({o:cur, rb:`${s.firstTry}/${s.n} moves first try${s.gaveUp?" (gave up)":""}`}); }
   $("rNext").style.display="";
   idx++; updStats();
+  $("rNextBtn").focus();              // Space / Enter now press "Next"
 }
 $("rReady").onclick=()=>startRebuildPhase();
 $("rNextBtn").onclick=()=>nextR();
@@ -232,8 +254,11 @@ $("rQuit").onclick=()=>{ state="idle"; cancelAnimationFrame(raf); rbs=null; rBoa
 bindRebuildPanel("fr",()=>rbs);
 
 /* ---------- keyboard for both challenges ---------- */
+// is the key going to a button, link, list or menu that should handle it itself?
+function ownsKey(e){ return (e.key==="Enter"||e.key===" ") && e.target.closest && e.target.closest("button:not(:disabled),a,select,textarea,[role=button],input:not(#ans)"); }
 document.addEventListener("keydown",e=>{
   if(currentPage!=="flash" || e.target.tagName==="INPUT" && e.target!==$("ans")) return;
+  if(ownsKey(e)) return;
   if($("game").classList.contains("on")){
     if(e.key==="Escape" && (state==="play"||state==="grace")) finish(gotHalf?"half":"bad", true);
     else if(state==="done" && (e.key===" "||e.key==="Enter") && document.activeElement!==$("ans")){ e.preventDefault(); nextQ(); }

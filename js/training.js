@@ -25,14 +25,14 @@ function OpeningPicker(el, onPick){
       if(!items.length) continue;
       shown.push(...items);
       const folded = big() && !q && !open.has(f) && !(selected && selected.family===f);
-      html+=`<div class="fam${big()?" fold":""}" data-f="${f.replace(/"/g,"&quot;")}">${big()?(folded?"▸ ":"▾ "):""}${f}${big()?` <span>${items.length}</span>`:""}</div>`;
+      html+=`<div class="fam${big()?" fold":""}" data-f="${f.replace(/"/g,"&quot;")}"${big()?` role="button" tabindex="0" aria-expanded="${!folded}"`:""}>${big()?(folded?"▸ ":"▾ "):""}${f}${big()?` <span>${items.length}</span>`:""}</div>`;
       if(folded) continue;
       for(const o of items){
         if(count++>=MAX) break;
         // same name used for several lines: show how each one ends so you can tell them apart
         const dup=set.byName[o.name].length>1, k=o.moves.length;
         const tail=dup?` · ${Math.ceil(k/2)}.${k%2?"":"…"}${o.moves[k-1]}`:"";
-        html+=`<div class="item${o===selected?" on":""}" data-n="${set.list.indexOf(o)}">${label(o)}<span>${o.plies.length} moves${tail}</span></div>`;
+        html+=`<div class="item${o===selected?" on":""}" data-n="${set.list.indexOf(o)}" role="button" tabindex="0"${o===selected?' aria-current="true"':""}>${label(o)}<span>${o.plies.length} moves${tail}</span></div>`;
       }
       if(count>=MAX){ html+=`<div class="fam">…more matches, keep typing to narrow it down</div>`; break; }
     }
@@ -42,26 +42,33 @@ function OpeningPicker(el, onPick){
     const it=e.target.closest(".item"); if(it) return pick(set.list[+it.dataset.n]);
     const fh=e.target.closest(".fam.fold"); if(fh){ const f=fh.dataset.f; open.has(f)?open.delete(f):open.add(f); draw(); }
   };
+  // Enter or Space on a focused entry/family does the same as clicking it
+  list.onkeydown=e=>{ if((e.key==="Enter"||e.key===" ") && e.target.closest(".item,.fam.fold")){ e.preventDefault(); e.stopPropagation(); e.target.click(); } };
   search.oninput=draw;
   el.querySelectorAll(".filt button").forEach(b=>b.onclick=()=>{
     if(b.dataset.v==="random"){ const pool=filter==="main"?set.list.filter(o=>o.name===o.family):set.list; pick(pool[Math.floor(Math.random()*pool.length)]); return; }
-    el.querySelectorAll(".filt button").forEach(x=>x.classList.toggle("sel",x===b));
+    el.querySelectorAll(".filt button").forEach(x=>{ x.classList.toggle("sel",x===b); x.setAttribute("aria-pressed",x===b?"true":"false"); });
     filter=b.dataset.v; draw();
   });
+  let loadGen=0;
+  const markSet=id=>el.querySelectorAll(".setsw button").forEach(x=>{ x.classList.toggle("sel",x.dataset.set===id); x.setAttribute("aria-pressed",x.dataset.set===id?"true":"false"); });
   el.querySelectorAll(".setsw button").forEach(b=>b.onclick=()=>{
-    el.querySelectorAll(".setsw button").forEach(x=>x.classList.toggle("sel",x===b));
+    const g=++loadGen; markSet(b.dataset.set);
     list.innerHTML=`<div class="fam">Loading…</div>`;
-    ensureSet(b.dataset.set).then(s2=>{ set=s2; open.clear(); index(); draw(); })
-      .catch(err=>{ list.innerHTML=`<div class="fam">⚠ ${err.message}. Check your internet connection.</div>`; });
+    ensureSet(b.dataset.set).then(s2=>{ if(g!==loadGen) return; set=s2; open.clear(); index(); draw(); })
+      .catch(err=>{ if(g===loadGen) list.innerHTML=`<div class="fam">⚠ ${err.message}. Check your internet connection.</div>`; });
   });
+  markSet("popular");
+  el.querySelectorAll(".filt button").forEach(b=>b.setAttribute("aria-pressed",b.classList.contains("sel")?"true":"false"));
   function pick(o){
     selected=o; draw(); onPick(o);
     const it=list.querySelector(".item.on"); if(it) it.scrollIntoView({block:"nearest"});
   }
   index(); draw();
-  return {pick(o){ if(o.set!==set){ set=o.set; index(); el.querySelectorAll(".setsw button").forEach(x=>x.classList.toggle("sel",x.dataset.set===set.id)); } pick(o); },
-    next(){ // the next opening (in the list as filtered) after the selected one
-      const i=shown.indexOf(selected); return shown[(i+1)%shown.length]||shown[0];
+  return {pick(o){ if(!o) return; if(o.set!==set){ loadGen++; set=o.set; index(); markSet(set.id); } pick(o); },
+    next(){ // the next opening (in the list as filtered) after the selected one; nothing if the list is empty
+      if(!shown.length) return null;
+      const i=shown.indexOf(selected); return shown[(i+1)%shown.length];
     }};
 }
 
@@ -117,16 +124,18 @@ function tLook(){
   $("tTitle").innerHTML=openingTitle(tCur);
   $("tEmpty").style.display="none"; $("tInfo").style.display="";
   $("tLookBox").style.display=""; $("tPlayBox").style.display="none"; $("tDoneBtns").style.display="none";
+  if(document.activeElement && document.activeElement.closest && document.activeElement.closest("#tDoneBtns")) document.activeElement.blur();
   $("tSteps").style.visibility="visible";
   tStep.load(tCur,true);
 }
 function tStart(){
   if(!tCur) return;
   tPhase="play"; $("tSteps").style.visibility="hidden";   // no peeking at the moves while you rebuild
+  if(document.activeElement && document.activeElement.closest && document.activeElement.closest("#tDoneBtns,#tLookBox")) document.activeElement.blur();
   $("tLookBox").style.display="none"; $("tPlayBox").style.display=""; $("tDoneBtns").style.display="none";
   tSess=new RebuildSession(tBoard,tCur,{
     onUpdate:(s,why)=>updateRebuildPanel("tr",s,why),
-    onDone:()=>{ tPhase="done"; $("tDoneBtns").style.display=""; },
+    onDone:()=>{ tPhase="done"; $("tDoneBtns").style.display=""; $("tNextOne").focus(); },   // Enter = next opening
   });
   tSess.start();
 }
@@ -138,6 +147,7 @@ bindRebuildPanel("tr",()=>tSess);
 
 document.addEventListener("keydown",e=>{
   if(e.target.tagName==="INPUT") return;
+  if(ownsKey(e)) return;               // a focused button/list entry handles its own Enter/Space
   if(currentPage==="study" && studyCur) keySteps(studyStep,e);
   if(currentPage==="rebuild"){
     if(tPhase==="look"){ if(!keySteps(tStep,e) && (e.key==="Enter"||e.key===" ")){ e.preventDefault(); tStart(); } }

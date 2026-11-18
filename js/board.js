@@ -36,6 +36,7 @@ class ChessBoard{
   }
   // show a position. last = [from,to] to highlight, turn = "w"/"b" for whose pieces can be moved
   set(fen,{last=null,turn=null}={}){
+    this._cancelDrag();               // a drag from the old position must not carry over (e.g. pressing S mid-drag)
     this.pos=parseFen(fen); this.last=last; this.turn=turn; this.sel=null; this.hintSq=null; this.render();
   }
   setInteractive(on){ this.interactive=on; this.el.classList.toggle("live",on); if(!on){ this.sel=null; this._cancelDrag(); } this.render(); }

@@ -199,10 +199,12 @@ function levFull(a,b,max=99){
 const tolFor=k=>k.length<6?0:Math.floor(k.length/4);   // short names must sound exactly right
 // only used when the words matched nothing at all (speech-to-text mangled the name)
 function identifyBySound(answer, set){
-  const a=soundKey(toks(stripNegation(answer)).filter(w=>!TYPE.has(w)).join(""));
+  const words=toks(stripNegation(answer)), said=words.filter(w=>CONFLICT.has(w));
+  const a=soundKey(words.filter(w=>!TYPE.has(w)).join(""));
   if(a.length<4) return [];
   let best=99, out=[];
   for(const o of set.list){
+    if(said.some(w=>!o.types.has(w))) continue;        // "Carokann Attack" is not the Caro-Kann Defense
     let d=99;
     for(const k of o.keys){ const tol=Math.min(tolFor(k), best<99?best:99); if(Math.abs(k.length-a.length)>tol) continue; const dd=levFull(a,k,tol); if(dd<=tol) d=Math.min(d,dd); }
     if(d<best){best=d;out=[o];} else if(d===best && d<99) out.push(o);
