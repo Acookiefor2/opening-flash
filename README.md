@@ -1,6 +1,10 @@
 # Opening Flash
 
-Learn chess openings by name, by sight and by heart. 153 openings and variations.
+Learn chess openings by name, by sight and by heart.
+
+Two opening sets:
+- **Popular**: 153 well-known openings and variations, with nicknames ("Caro Khan", "Philadelphia defense") and voice-friendly spellings.
+- **Lichess**: all 3,865 named lines from the [Lichess chess-openings database](https://github.com/lichess-org/chess-openings) (public domain, CC0).
 
 - **Flash → Name it**: a position flashes up, name the opening before the timer runs out (type it, or say it with browser voice or Whisper).
 - **Flash → Rebuild it**: see the line for a few seconds, then play it from memory, both sides, exact move order.

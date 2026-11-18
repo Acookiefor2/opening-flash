@@ -3,18 +3,28 @@ const $=id=>document.getElementById(id);
 function moveText(m){ return moveListHTML(m); }
 
 /* ---------- settings ---------- */
-const S={mode:"name",time:10,pool:"all",len:25,voice:"off"};
+const S={mode:"name",set:"popular",time:10,pool:"all",len:25,voice:"off"};
 function seg(id,key){
   $(id).querySelectorAll("button").forEach(b=>b.onclick=()=>{
     $(id).querySelectorAll("button").forEach(x=>x.classList.remove("sel"));
-    b.classList.add("sel"); S[key]= ["pool","voice","mode"].includes(key) ? b.dataset.v : +b.dataset.v;
+    b.classList.add("sel"); S[key]= ["pool","voice","mode","set"].includes(key) ? b.dataset.v : +b.dataset.v;
     if(key==="voice") voiceChosen();
+    if(key==="set") setChosen();
     if(key==="mode") modeChosen();
   });
 }
-seg("segMode","mode"); seg("segTime","time"); seg("segPool","pool"); seg("segLen","len"); seg("segVoice","voice");
-$("cMain").textContent=OPENINGS.filter(o=>o.name===o.family).length;
-$("cAll").textContent=OPENINGS.length;
+seg("segMode","mode"); seg("segSet","set"); seg("segTime","time"); seg("segPool","pool"); seg("segLen","len"); seg("segVoice","voice");
+function showCounts(set){
+  $("cMain").textContent=set.list.filter(o=>o.name===o.family).length.toLocaleString();
+  $("cAll").textContent=set.list.length.toLocaleString();
+}
+showCounts(getSet("popular"));
+function setChosen(){
+  $("setNote").textContent = S.set==="lichess" ? "Loading the Lichess openings…" : "";
+  ensureSet(S.set).then(set=>{ showCounts(set);
+    $("setNote").textContent = S.set==="lichess" ? "Full names from the Lichess database. Naming a shorter part of the name (like \"Najdorf\" for \"Najdorf Variation, English Attack\") gets half a point." : "";
+  }).catch(err=>{ $("setNote").textContent="⚠ "+err.message+". Check your internet connection."; });
+}
 const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
 if(!SR){ $("vBrowser").disabled=true; $("vBrowser").title="Not supported in this browser"; $("vBrowser").style.opacity=.4; }
 const VOICE_NOTES={
@@ -62,16 +72,21 @@ const fmtScore=x=>(Math.round(x*10)/10).toString();
 $("btnStart").onclick=startRun;
 $("btnAgain").onclick=()=>{ show("start"); $("stats").style.display="none"; if(S.mode==="name" && S.voice==="whisper") startMicTest(); };
 function startRun(){
-  let pool = S.pool==="main" ? OPENINGS.filter(o=>o.name===o.family) : OPENINGS.slice();
+  stopVoice(); whisperStop(); stopMicTest();
+  if(S.mode==="name" && S.voice==="whisper") whisperPrime();   // must happen inside this click, or the browser keeps audio switched off
+  const btn=$("btnStart"); btn.disabled=true;
+  ensureSet(S.set).then(set=>{ btn.disabled=false; beginRun(set); })
+    .catch(err=>{ btn.disabled=false; $("setNote").textContent="⚠ "+err.message+". Check your internet connection."; });
+}
+function beginRun(set){
+  let pool = S.pool==="main" ? set.list.filter(o=>o.name===o.family) : set.list.slice();
   deck = shuffle(pool); if(S.len && S.len<deck.length) deck=deck.slice(0,S.len);
   idx=0; score=0; streak=0; bestStreak=0; nGood=0; nHalf=0; times=[]; review=[];
   rbStats={perfect:0, firstTry:0, total:0, hints:0, mistakes:0};
   runMode=S.mode;
   $("stats").style.display="flex";
-  stopVoice(); whisperStop(); stopMicTest();
   if(runMode==="rebuild"){ show("rgame"); return nextR(); }
   show("game");
-  if(S.voice==="whisper") whisperPrime();   // must happen inside this click, or the browser keeps audio switched off
   if(S.voice==="browser") startVoice(); else if(S.voice==="whisper") whisperStart();
   nextQ();
 }
@@ -154,7 +169,7 @@ function finish(res, gaveUp){
     v.className="verdict on good"; v.innerHTML=`Correct in ${took.toFixed(2)}s<b>${cur.name}</b>${mv}`;
   }else if(res==="half"){
     score+=.5; nHalf++; streak=0;
-    v.className="verdict on half"; v.innerHTML=`Half point. Family right, it was<b>${cur.name}</b>${mv}`;
+    v.className="verdict on half"; v.innerHTML=`Half point. On the right track, but it was<b>${cur.name}</b>${mv}`;
     review.push({o:cur,you:bestTry});
   }else{
     streak=0;

@@ -1,43 +1,68 @@
 /* ---------- Training: Study and Rebuild ---------- */
 
-// searchable list of openings, grouped by family. onPick(opening) when you click one
+// searchable list of openings, grouped by family, for either set. onPick(opening) when you click one
 function OpeningPicker(el, onPick){
   el.innerHTML=`
+    <div class="seg small setsw"><button data-set="popular" class="sel">Popular</button><button data-set="lichess">Lichess (3,865)</button></div>
     <input class="search" placeholder="Search openings…" spellcheck="false">
-    <div class="seg small"><button data-v="all" class="sel">All</button><button data-v="main">Main only</button><button data-v="random">🎲 Random</button></div>
+    <div class="seg small filt"><button data-v="all" class="sel">All</button><button data-v="main">Main only</button><button data-v="random">🎲 Random</button></div>
     <div class="olist"></div>`;
   const search=el.querySelector(".search"), list=el.querySelector(".olist");
-  let filter="all", selected=null;
-  const fams=[]; const byFam={};
-  OPENINGS.forEach(o=>{ if(!byFam[o.family]){ byFam[o.family]=[]; fams.push(o.family); } byFam[o.family].push(o); });
+  let set=getSet("popular"), filter="all", selected=null, open=new Set(), shown=[];
+  let fams=[], byFam={};
+  function index(){
+    fams=[]; byFam={};
+    set.list.forEach(o=>{ if(!byFam[o.family]){ byFam[o.family]=[]; fams.push(o.family); } byFam[o.family].push(o); });
+  }
+  const big=()=>set.list.length>400;   // big list: families start folded up
+  const label=o=>o.name===o.family?"<i>main line</i>":o.name.slice(o.name.indexOf(":")>=0?o.name.indexOf(":")+1:o.family.length).replace(/^[\s,]+/,"");
   function draw(){
-    const q=norm(search.value);
-    let html="";
+    const q=norm(search.value), MAX=300;
+    let html="", count=0; shown=[];
     for(const f of fams){
       let items=byFam[f].filter(o=>filter!=="main"||o.name===o.family);
-      if(q) items=items.filter(o=>norm(o.name+" "+o.aliases.join(" ")+" "+o.family).includes(q));
+      if(q) items=items.filter(o=>norm(o.name+" "+o.aliases.join(" ")+" "+(o.eco||"")).includes(q));
       if(!items.length) continue;
-      html+=`<div class="fam">${f}</div>`+items.map(o=>`<div class="item${o===selected?" on":""}" data-n="${OPENINGS.indexOf(o)}">
-        ${o.name===o.family?"<i>main line</i>":o.name.replace(/^[^:]*:\s*/,"")}<span>${o.plies.length} moves</span></div>`).join("");
+      shown.push(...items);
+      const folded = big() && !q && !open.has(f) && !(selected && selected.family===f);
+      html+=`<div class="fam${big()?" fold":""}" data-f="${f.replace(/"/g,"&quot;")}">${big()?(folded?"▸ ":"▾ "):""}${f}${big()?` <span>${items.length}</span>`:""}</div>`;
+      if(folded) continue;
+      for(const o of items){
+        if(count++>=MAX) break;
+        // same name used for several lines: show how each one ends so you can tell them apart
+        const dup=set.byName[o.name].length>1, k=o.moves.length;
+        const tail=dup?` · ${Math.ceil(k/2)}.${k%2?"":"…"}${o.moves[k-1]}`:"";
+        html+=`<div class="item${o===selected?" on":""}" data-n="${set.list.indexOf(o)}">${label(o)}<span>${o.plies.length} moves${tail}</span></div>`;
+      }
+      if(count>=MAX){ html+=`<div class="fam">…more matches, keep typing to narrow it down</div>`; break; }
     }
     list.innerHTML=html||`<div class="fam">Nothing matches.</div>`;
   }
-  list.onclick=e=>{ const it=e.target.closest(".item"); if(it) pick(OPENINGS[+it.dataset.n]); };
+  list.onclick=e=>{
+    const it=e.target.closest(".item"); if(it) return pick(set.list[+it.dataset.n]);
+    const fh=e.target.closest(".fam.fold"); if(fh){ const f=fh.dataset.f; open.has(f)?open.delete(f):open.add(f); draw(); }
+  };
   search.oninput=draw;
-  el.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{
-    if(b.dataset.v==="random"){ const pool=filter==="main"?OPENINGS.filter(o=>o.name===o.family):OPENINGS; pick(pool[Math.floor(Math.random()*pool.length)]); return; }
-    el.querySelectorAll(".seg button").forEach(x=>x.classList.toggle("sel",x===b));
+  el.querySelectorAll(".filt button").forEach(b=>b.onclick=()=>{
+    if(b.dataset.v==="random"){ const pool=filter==="main"?set.list.filter(o=>o.name===o.family):set.list; pick(pool[Math.floor(Math.random()*pool.length)]); return; }
+    el.querySelectorAll(".filt button").forEach(x=>x.classList.toggle("sel",x===b));
     filter=b.dataset.v; draw();
+  });
+  el.querySelectorAll(".setsw button").forEach(b=>b.onclick=()=>{
+    el.querySelectorAll(".setsw button").forEach(x=>x.classList.toggle("sel",x===b));
+    list.innerHTML=`<div class="fam">Loading…</div>`;
+    ensureSet(b.dataset.set).then(s2=>{ set=s2; open.clear(); index(); draw(); })
+      .catch(err=>{ list.innerHTML=`<div class="fam">⚠ ${err.message}. Check your internet connection.</div>`; });
   });
   function pick(o){
     selected=o; draw(); onPick(o);
     const it=list.querySelector(".item.on"); if(it) it.scrollIntoView({block:"nearest"});
   }
-  draw();
-  return {pick, next(){ // the next opening in the list after the selected one
-    const vis=[...list.querySelectorAll(".item")].map(i=>OPENINGS[+i.dataset.n]);
-    const i=vis.indexOf(selected); return vis[(i+1)%vis.length]||vis[0];
-  }};
+  index(); draw();
+  return {pick(o){ if(o.set!==set){ set=o.set; index(); el.querySelectorAll(".setsw button").forEach(x=>x.classList.toggle("sel",x.dataset.set===set.id)); } pick(o); },
+    next(){ // the next opening (in the list as filtered) after the selected one
+      const i=shown.indexOf(selected); return shown[(i+1)%shown.length]||shown[0];
+    }};
 }
 
 // step through an opening's moves on a board: ⏮ ◀ ▶ ⏭, arrow keys, or click a move
@@ -74,7 +99,7 @@ let studyCur=null;
 const studyPicker=OpeningPicker($("sPicker"),o=>{
   studyCur=o;
   $("sTitle").innerHTML=openingTitle(o);
-  $("sAka").textContent=o.aliases.length?"Also called: "+o.aliases.slice(0,4).map(a=>a.replace(/\b\w/g,c=>c.toUpperCase())).join(", "):"";
+  $("sAka").textContent=(o.eco?"ECO "+o.eco+(o.aliases.length?" · ":""):"")+(o.aliases.length?"Also called: "+o.aliases.slice(0,4).map(a=>a.replace(/\b\w/g,c=>c.toUpperCase())).join(", "):"");
   studyStep.load(o,true);
   $("sInfo").style.display=""; $("sEmpty").style.display="none";
 });

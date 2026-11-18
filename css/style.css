@@ -160,3 +160,7 @@
     body{padding:14px 10px}
     nav a{padding:7px 10px}
   }
+  .setsw{margin:0 0 10px}
+  .olist .fam.fold{cursor:pointer;user-select:none;padding:4px 2px;margin:6px 0 2px;border-radius:6px}
+  .olist .fam.fold:hover{background:#2b2833}
+  .olist .fam span{color:var(--dim);font-weight:400;margin-left:4px}

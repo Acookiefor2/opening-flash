@@ -38,6 +38,14 @@
           <button data-v="rebuild">Rebuild it</button>
         </div>
       </div>
+      <div class="row">
+        <label class="t">Opening set</label>
+        <div class="seg" id="segSet">
+          <button data-v="popular" class="sel">Popular (153)</button>
+          <button data-v="lichess">Lichess (3,865)</button>
+        </div>
+        <div class="chk" style="cursor:default"><small id="setNote"></small></div>
+      </div>
       <h2 id="startTitle">Name that opening</h2>
       <p id="startText">A position flashes up. Type or say the opening's name before the timer runs out.
         No opening comes up twice in a run. Naming only the family ("Sicilian" when it's the Najdorf) gets half a point.</p>
@@ -229,12 +237,13 @@
   </div>
 </main>
 
-<footer>153 openings · made by <a href="https://github.com/Acookiefor2">Acookiefor2</a></footer>
+<footer>Made by <a href="https://github.com/Acookiefor2">Acookiefor2</a> · Lichess set: opening names and lines from the
+  <a href="https://github.com/lichess-org/chess-openings">Lichess chess-openings database</a> (public domain, CC0)</footer>
 </div>
 
 <script src="js/openings.js"></script>
-<script src="js/matcher.js"></script>
 <script src="js/board.js"></script>
+<script src="js/matcher.js"></script>
 <script src="js/rebuild.js"></script>
 <script>
   // the two rebuild panels share one template
