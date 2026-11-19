@@ -8,6 +8,10 @@ class RebuildSession{
   get turn(){ return this.ply%2===0 ? "w" : "b"; }
   get expected(){ return this.o.plies[this.ply]; }
   start(){
+    this.game=new Chess();            // full chess rules, so we know which moves are legal
+    this.b.legalFor=sq=>this.done ? [] : this.game.moves({square:sq, verbose:true})
+      .map(m=>({to:m.to, capture:m.flags.includes("c")||m.flags.includes("e")}));
+    this.illegal=0;
     this.ply=0; this.mistakes=0; this.hints=0; this.shown=0; this.done=false; this.gaveUp=false;
     this.dirty=new Array(this.n).fill(false);      // a move is "first try" only if no mistake, hint or show on it
     this.t0=performance.now();
@@ -21,6 +25,8 @@ class RebuildSession{
     const e=this.expected;
     const ok = from===e[0] && (to===e[1] || (e[3] && to===e[3]));   // e[3]: castling by dropping the king on its rook
     if(ok){ this._advance(); return true; }
+    // a move the rules don't allow (knight moving like a bishop, a misdrop) just snaps back: not a mistake
+    if(!this.game.moves({square:from, verbose:true}).some(m=>m.to===to)){ this.onUpdate(this,"illegal"); return false; }
     this.mistakes++; this.dirty[this.ply]=true;
     this.onUpdate(this,"wrong");
     return false;
@@ -47,6 +53,7 @@ class RebuildSession{
   get secs(){ return ((this.doneAt||performance.now())-this.t0)/1000; }
   _advance(why){
     const e=this.expected; this.ply++;
+    try{ this.game.move({from:e[0], to:e[1]}); }catch(_){}
     this.b.set(e[2],{last:[e[0],e[1]], turn:this.turn});
     if(this.ply>=this.n) return this._finish();
     this.onUpdate(this, why||"ok");
@@ -93,6 +100,7 @@ function updateRebuildPanel(id, s, why){
   st.innerHTML=`Move ${Math.floor(s.ply/2)+1} · <b>${s.turn==="w"?"White":"Black"}</b> to play <span class="dim">(${s.ply} of ${s.n} done)</span>`;
   msg.className="rb-msg";
   msg.innerHTML = why==="wrong" ? `<span style="color:var(--bad)">Not that one. Try again.</span>`
+    : why==="illegal" ? `<span class="dim">That piece can't move there.</span>`
     : why==="hint" ? `The grey piece moves next.`
     : why==="shown" ? `That was ${s.o.moves[s.ply-1]}.` : "";
 }

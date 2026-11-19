@@ -21,6 +21,7 @@ class ChessBoard{
     this.el=el; el.classList.add("board"); el.innerHTML="";
     this.cells={}; this.pos={}; this.last=null; this.sel=null; this.hintSq=null; this.wrongSq=null;
     this.interactive=false; this.turn=null; this.onMove=null; this.drag=null;
+    this.legalFor=null;   // optional: square -> [{to, capture}] so a selected piece shows where it can go
     for(let r=0;r<8;r++) for(let c=0;c<8;c++){
       const name=FILES[c]+(8-r), sq=document.createElement("div");
       sq.className="sq "+((r+c)%2===0?"l":"d"); sq.dataset.sq=name;
@@ -46,7 +47,12 @@ class ChessBoard{
     clearTimeout(this._wt); this._wt=setTimeout(()=>{ this.wrongSq=null; this.render(); },450);
   }
   render(){
+    // dots on the squares the selected piece can legally move to (rings on captures), like chess.com
+    const targets=new Map();
+    if(this.interactive && this.sel && this.legalFor) for(const m of this.legalFor(this.sel)) targets.set(m.to, m.capture);
     for(const [name,sq] of Object.entries(this.cells)){
+      sq.classList.toggle("dot", targets.has(name) && !targets.get(name));
+      sq.classList.toggle("ring", targets.has(name) && !!targets.get(name));
       sq.classList.toggle("hl", !!(this.last && this.last.includes(name)));
       sq.classList.toggle("sel", this.sel===name);
       sq.classList.toggle("hintsq", this.hintSq===name);
