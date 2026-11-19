@@ -43,10 +43,7 @@
   .sq{position:relative;display:flex;align-items:center;justify-content:center}
   .sq.l{background:var(--light)}.sq.d{background:var(--dark)}
   .sq.hl::after{content:"";position:absolute;inset:0;background:var(--hl)}
-  .pc{position:relative;z-index:1;font-size:min(8.2vw,52px);line-height:1;
-    font-family:"Segoe UI Symbol","DejaVu Sans","Noto Sans Symbols2","Arial Unicode MS",serif}
-  .pc.w{color:#fff;text-shadow:0 0 1px #000,0 0 1px #000,1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000}
-  .pc.b{color:#111;text-shadow:0 0 1px #555}
+  .pc{position:relative;z-index:1;display:block;width:92%;height:92%;background:center/contain no-repeat}
   .co{position:absolute;font-size:11px;font-weight:700;z-index:1}
   .co.f{right:3px;bottom:1px}.co.r{left:3px;top:2px}
   .sq.l .co{color:var(--dark)}.sq.d .co{color:var(--light)}

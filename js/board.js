@@ -1,7 +1,10 @@
 /* ---------- chess board (shared by Flash, Study and Rebuild) ---------- */
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
 const FILES = "abcdefgh";
-const GLYPH = {k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"♟"};
+// piece images: "Chessnut" by Alexis Luengas, Apache 2.0 (see img/pieces/README.txt)
+const pieceImg = p => `url(img/pieces/${p===p.toUpperCase()?"w":"b"}${p.toUpperCase()}.svg)`;
+// load all 12 up front so the first flashed position doesn't pop in piece by piece
+"KQRBNPkqrbnp".split("").forEach(p=>{ const im=new Image(); im.src=pieceImg(p).slice(4,-1); });
 
 function parseFen(fen){
   const pos={};
@@ -62,7 +65,7 @@ class ChessBoard{
       if(!p){ if(pc) pc.remove(); continue; }
       if(!pc){ pc=document.createElement("span"); sq.appendChild(pc); }
       pc.className="pc "+(isWhite(p)?"w":"b")+(this.drag&&this.drag.from===name&&this.drag.moved?" lifted":"");
-      pc.textContent=GLYPH[p.toLowerCase()]+"︎";
+      if(pc.dataset.p!==p){ pc.dataset.p=p; pc.style.backgroundImage=pieceImg(p); }
     }
   }
   _sqAt(x,y){   // which square is under the pointer (asks the squares themselves, so it can't drift)
@@ -90,8 +93,8 @@ class ChessBoard{
     if(!d.moved && Math.hypot(e.clientX-d.x,e.clientY-d.y)>4){
       d.moved=true;
       const g=document.createElement("span"), p=this.pos[d.from];
-      g.className="pc ghost "+(isWhite(p)?"w":"b"); g.textContent=GLYPH[p.toLowerCase()]+"︎";
-      g.style.fontSize=getComputedStyle(this.cells[d.from].querySelector(".pc")).fontSize;
+      g.className="pc ghost"; g.style.backgroundImage=pieceImg(p);
+      const size=this.cells[d.from].getBoundingClientRect().width; g.style.width=g.style.height=size+"px";
       document.body.appendChild(g); d.ghost=g; this.render();
     }
     if(d.ghost){ d.ghost.style.left=e.clientX+"px"; d.ghost.style.top=e.clientY+"px"; }

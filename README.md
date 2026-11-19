@@ -14,3 +14,8 @@ Two opening sets:
 No install, no build step: it's plain HTML, CSS and JavaScript. Open `index.html`, or host the folder anywhere (e.g. GitHub Pages).
 
 Whisper voice answers run [Whisper tiny.en](https://huggingface.co/Xenova/whisper-tiny.en) in your browser with [transformers.js](https://github.com/huggingface/transformers.js) (about 40 MB, downloaded once).
+
+## Credits
+- Chess pieces: [Chessnut](https://github.com/LexLuengas/chessnut-pieces) by Alexis Luengas, Apache 2.0 (unmodified; licence in `img/pieces/`).
+- Legal-move rules: [chess.js](https://github.com/jhlywa/chess.js) by Jeff Hlywa, BSD-2-Clause.
+- Lichess opening set: [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings), CC0.
