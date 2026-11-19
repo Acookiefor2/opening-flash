@@ -195,7 +195,7 @@
   @keyframes bigpop{to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
   /* everyone: a bigger board */
   .app{max-width:1360px}
-  .game{grid-template-columns:minmax(280px,640px) 1fr}
+  .game{grid-template-columns:minmax(260px,min(600px,calc(100vh - 190px))) 1fr}   /* never taller than the screen */
   input.ans{font-size:22px}
   /* the "how to play" hints go away after your first couple of runs */
   body.seasoned #page-flash .hint{display:none}
@@ -206,7 +206,7 @@
   .linkbtn{background:none;border:0;padding:0;margin:2px 0 0;color:var(--dim);font-size:12px;text-decoration:underline;cursor:pointer}
   /* streamer mode = clean mode for recording */
   body.streamer .app{max-width:1500px}
-  body.streamer .game{grid-template-columns:minmax(300px,700px) 1fr}
+  body.streamer .game{grid-template-columns:minmax(260px,min(680px,calc(100vh - 170px))) 1fr}
   body.streamer .stats{font-size:18px} body.streamer .stats b{font-size:30px}
   body.streamer input.ans{font-size:28px;padding:18px 20px}
   body.streamer .verdict{font-size:20px} body.streamer .verdict b{font-size:28px}
