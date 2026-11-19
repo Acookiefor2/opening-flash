@@ -9,7 +9,7 @@ let speechQ=-1;
 // staleSlot: if you were mid-sentence when the question changed and no words had arrived yet,
 // the next result slot belongs to the OLD question; ignore it until it finishes.
 let staleSlot=-1;
-function micStatus(html){ $("mic").innerHTML=html; }
+function micStatus(html){ $("mic").innerHTML=html; if(typeof voiceTrouble==="function") voiceTrouble(/⚠/.test(html)); }
 // debug trail of what the browser's speech engine is doing (shown in small text under the mic line)
 const vtrail=[];
 function vlog(x){ vtrail.push(x); if(vtrail.length>10) vtrail.shift(); const el=$("vlog"); if(el) el.textContent="mic log: "+vtrail.join(" › "); }

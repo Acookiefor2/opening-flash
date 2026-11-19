@@ -34,7 +34,7 @@
     </nav>
     <div class="toggles">
       <button class="btn icon" id="btnSound" aria-pressed="false" title="Sound effects">🔇</button>
-      <button class="btn" id="btnStreamer" aria-pressed="false" title="Bigger board, big verdicts, no debug text">📺 Streamer</button>
+      <button class="btn" id="btnStreamer" aria-pressed="false" title="Clean mode for recording: bigger text, no hints, no mic details">📺 Streamer</button>
     </div>
     <div class="stats" id="stats" style="display:none">
       <div>Score<b id="sScore">0</b></div>
@@ -140,6 +140,7 @@
           <div class="moves" id="moves"></div>
           <input class="ans" id="ans" placeholder="Type the opening name…" autocomplete="off" spellcheck="false">
           <div class="mic" id="mic"></div>
+          <button class="linkbtn" id="micDetails" type="button">mic details</button>
           <div id="alvl" class="mono dim" style="font-size:12px;min-height:16px"></div>
           <div id="vlog" class="mono dim" style="font-size:11px;min-height:14px;word-break:break-all"></div>
           <div class="verdict" id="verdict"></div>

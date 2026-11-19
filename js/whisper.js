@@ -262,10 +262,11 @@ function showMeter(){
   const el=$("alvl"); if(!el) return;
   if(!W.on || !W.ctx){ el.textContent=""; return; }
   const st=W.ctx.state;
-  if(st!=="running"){ el.textContent=`⚠ audio is ${st}: click anywhere on the page to switch it on`; return; }
+  if(st!=="running"){ el.textContent=`⚠ audio is ${st}: click anywhere on the page to switch it on`; voiceTrouble(true); return; }
   if(!W.frames){ el.textContent="⚠ no sound arriving from the mic yet"; return; }
   const tr=W.stream&&W.stream.getAudioTracks()[0], name=tr?tr.label:"?";
-  if(W.level===0){ el.textContent=`⚠ pure silence from "${name}"${tr&&tr.muted?" (MUTED)":""}. Pick another mic on the start screen.`; return; }
+  if(W.level===0 && W.frames>20){ el.textContent=`⚠ pure silence from "${name}"${tr&&tr.muted?" (MUTED)":""}. Pick another mic on the start screen.`; voiceTrouble(true); return; }
+  if(W.level>0) voiceTrouble(false);
   const n=Math.min(20,Math.round(W.level/Math.max(W.thr,1e-6)*10));
   el.textContent=`mic level [${"█".repeat(n)}${"·".repeat(20-n)}] ${W.level.toFixed(3)} (speech counts above ${W.thr.toFixed(3)}, the middle of the bar)`;
 }

@@ -193,13 +193,27 @@
   .bigv.perfect{border-color:var(--accent)}
   .bigv.pop{animation:bigpop .35s cubic-bezier(.2,1.6,.4,1) forwards}
   @keyframes bigpop{to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+  /* everyone: a bigger board */
+  .app{max-width:1360px}
+  .game{grid-template-columns:minmax(280px,640px) 1fr}
+  input.ans{font-size:22px}
+  /* the "how to play" hints go away after your first couple of runs */
+  body.seasoned #page-flash .hint{display:none}
+  /* mic details only when voice has a problem, or when you ask */
+  #vlog,#alvl,#micDetails{display:none}
+  body.voicetrouble #vlog, body.voicetrouble #alvl, body.showdebug #vlog, body.showdebug #alvl{display:block}
+  #game .mic:not(:empty) + #micDetails{display:inline-block}
+  .linkbtn{background:none;border:0;padding:0;margin:2px 0 0;color:var(--dim);font-size:12px;text-decoration:underline;cursor:pointer}
+  /* streamer mode = clean mode for recording */
   body.streamer .app{max-width:1500px}
-  body.streamer .game{grid-template-columns:minmax(300px,680px) 1fr}
+  body.streamer .game{grid-template-columns:minmax(300px,700px) 1fr}
   body.streamer .stats{font-size:18px} body.streamer .stats b{font-size:30px}
   body.streamer input.ans{font-size:28px;padding:18px 20px}
   body.streamer .verdict{font-size:20px} body.streamer .verdict b{font-size:28px}
   body.streamer .moves{font-size:18px}
-  body.streamer .hint, body.streamer #vlog, body.streamer #alvl, body.streamer footer{display:none}
+  body.streamer .hint, body.streamer #vlog, body.streamer #alvl, body.streamer #micDetails, body.streamer footer{display:none!important}
   body.streamer .timer{height:16px}
   body.streamer .tnum{font-size:20px;color:var(--text)}
+  /* phones: one column again (these come after the bigger-board rules on purpose) */
+  @media (max-width:760px){ .game, body.streamer .game{grid-template-columns:1fr} }
   @media (max-width:760px){ header .toggles{order:3} }

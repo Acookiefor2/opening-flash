@@ -100,7 +100,7 @@ function beginRun(set,opts){
   deck = shuffleWith(pool, seededRandom(opts.seed)); if(opts.len && opts.len<deck.length) deck=deck.slice(0,opts.len);   // same seed, same openings
   R={...opts}; delete R.voice; marks=[];
   idx=0; score=0; streak=0; bestStreak=0; nGood=0; nHalf=0; times=[]; review=[];
-  SFX.start();
+  SFX.start(); countRun(); voiceTrouble(false);
   rbStats={perfect:0, firstTry:0, total:0, hints:0, mistakes:0};
   runMode=opts.mode;
   $("stats").style.display="flex";
