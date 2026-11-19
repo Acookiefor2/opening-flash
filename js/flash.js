@@ -62,22 +62,28 @@ let score=0, streak=0, bestStreak=0, nGood=0, nHalf=0, times=[], review=[], best
 let rec=null, speaking=false, graceTimer=0;
 let qSeq=0, answerAt=0;   // qSeq: which question is on screen; answerAt: when a voice answer was actually spoken
 let runMode="name", rbs=null, rbStats={};   // rbs: the current rebuild session in "Rebuild it"
+// R: the settings of the run being played (a snapshot, or a daily / challenge preset). marks: one result per opening, for sharing
+let R={kind:"free", mode:"name", set:"popular", pool:"all", time:10, len:25, flash:false, moves:true, seed:""}, marks=[];
+let pendingChallenge=null;     // a challenge link that was opened, waiting for you to press Play
 
 const flashBoard=new ChessBoard($("board"));
 const rBoard=new ChessBoard($("rboard"));
 function drawBoard(fen,last){ flashBoard.set(fen,{last}); }
 
-function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
 function show(id){ document.querySelectorAll("#page-flash .screen").forEach(s=>s.classList.toggle("on",s.id===id)); }
 function updStats(){ $("sScore").textContent=score%1?score.toFixed(1).replace(/\.0$/,""):score; $("sStreak").textContent=streak; $("sLeft").textContent=deck.length-idx; }
 const fmtScore=x=>(Math.round(x*10)/10).toString();
 
-$("btnStart").onclick=startRun;
+$("btnStart").onclick=()=>startRun();
 $("btnAgain").onclick=()=>{ show("start"); $("stats").style.display="none"; if(S.mode==="name" && S.voice==="whisper") startMicTest(); };
 let startGen=0;
-function startRun(){
+function startRun(preset){
   const g=++startGen;
-  const opts={mode:S.mode, voice:S.voice, set:S.set, pool:S.pool, len:S.len};   // the settings as they were when you clicked
+  // the settings as they were when you clicked (or the daily / challenge preset). Voice is always yours.
+  const opts = preset ? {...preset, voice:S.voice}
+    : {kind:"free", mode:S.mode, voice:S.voice, set:S.set, pool:S.pool, len:S.len, time:S.time,
+       flash:$("optFlash").checked, moves:$("optMoves").checked, seed:newSeed()};
+  if(opts.kind==="daily"){ if(dailyResult(opts.day)) return showDaily(); store.set("daily:"+opts.day,{started:true}); }   // one try a day
   stopVoice(); whisperStop(); stopMicTest();
   if(opts.mode==="name" && opts.voice==="whisper") whisperPrime();   // must happen inside this click, or the browser keeps audio switched off
   const btn=$("btnStart"); btn.disabled=true;
@@ -91,8 +97,10 @@ function beginRun(set,opts){
   let pool = opts.pool==="main" ? set.list.filter(o=>o.name===o.family) : set.list.slice();
   // Name it: Lichess uses some names for several lines; ask each name only once
   if(opts.mode==="name"){ const seenN=new Set(); pool=pool.filter(o=>!seenN.has(o.nkey) && seenN.add(o.nkey)); }
-  deck = shuffle(pool); if(opts.len && opts.len<deck.length) deck=deck.slice(0,opts.len);
+  deck = shuffleWith(pool, seededRandom(opts.seed)); if(opts.len && opts.len<deck.length) deck=deck.slice(0,opts.len);   // same seed, same openings
+  R={...opts}; delete R.voice; marks=[];
   idx=0; score=0; streak=0; bestStreak=0; nGood=0; nHalf=0; times=[]; review=[];
+  SFX.start();
   rbStats={perfect:0, firstTry:0, total:0, hints:0, mistakes:0};
   runMode=opts.mode;
   $("stats").style.display="flex";
@@ -117,25 +125,28 @@ function nextQ(){
   cur=deck[idx]; bestTry=""; gotHalf=false; qSeq++; resetHeard();
   drawBoard(cur.fen, cur.last);
   $("board").classList.remove("hidden");
-  const mv=$("moves"); mv.innerHTML=moveText(cur.moves); mv.classList.toggle("hide",!$("optMoves").checked);
-  $("verdict").className="verdict"; $("verdict").innerHTML="";
+  const mv=$("moves"); mv.innerHTML=moveText(cur.moves); mv.classList.toggle("hide",!R.moves);
+  $("verdict").className="verdict"; $("verdict").innerHTML=""; clearBigVerdict($("board")); lastTick=99;
   const a=$("ans"); a.value=""; a.disabled=false; a.focus();
   $("qNum").textContent=`${idx+1} / ${deck.length}`;
   updStats();
-  state="play"; t0=performance.now(); deadline=t0+S.time*1000;
+  state="play"; t0=performance.now(); deadline=t0+R.time*1000;
   cancelAnimationFrame(raf); tick();
 }
 function setBar(barId,labelId,left){
-  const frac=left/(S.time*1000), bar=$(barId);
+  const frac=left/(R.time*1000), bar=$(barId);
   bar.style.transform=`scaleX(${frac})`;
   bar.style.background= frac>.5?"var(--good)":frac>.2?"var(--warn)":"var(--bad)";
   $(labelId).textContent=(left/1000).toFixed(1)+"s";
   return frac;
 }
+let lastTick=99;
 function tick(){
   const left=Math.max(0,deadline-performance.now());
   const frac=setBar("bar","tLeft",left);
-  if($("optFlash").checked && frac<.5) $("board").classList.add("hidden");
+  if(R.flash && frac<.5) $("board").classList.add("hidden");
+  // last 3 seconds tick (only if the timer is long enough for that to mean something)
+  const secs=Math.ceil(left/1000); if(state==="play" && R.time>=5 && secs<=3 && secs>0 && secs<lastTick){ lastTick=secs; SFX.tick(); }
   if(state!=="play") return;
   if(left<=0){
     // browser voice: you started talking in time and it hasn't sent the final words yet
@@ -185,15 +196,18 @@ function finish(res, gaveUp){
   const v=$("verdict");
   const mv=`<div class="mv">${cur.moves.join(" ")}</div>`;
   if(res==="good"){
-    score+=1; nGood++; streak++; bestStreak=Math.max(bestStreak,streak); times.push(took);
+    score+=1; nGood++; streak++; bestStreak=Math.max(bestStreak,streak); times.push(took); marks.push("good");
     v.className="verdict on good"; v.innerHTML=`Correct in ${took.toFixed(2)}s<b>${cur.name}</b>${mv}`;
+    SFX.good(); bigVerdict($("board"),"good",cur.name,`${took.toFixed(2)}s`);
   }else if(res==="half"){
-    score+=.5; nHalf++; streak=0;
+    score+=.5; nHalf++; streak=0; marks.push("half");
     v.className="verdict on half"; v.innerHTML=`Half point. On the right track, but it was<b>${cur.name}</b>${mv}`;
+    SFX.half(); bigVerdict($("board"),"half",cur.name,"half point");
     review.push({o:cur,you:bestTry});
   }else{
-    streak=0;
+    streak=0; marks.push("bad");
     v.className="verdict on bad"; v.innerHTML=`${gaveUp?"Skipped":"Time's up"}. It was<b>${cur.name}</b>${mv}`;
+    SFX.bad(); bigVerdict($("board"),"bad",cur.name,gaveUp?"skipped":"time's up");
     review.push({o:cur,you:bestTry||typed});
   }
   idx++; updStats();
@@ -210,12 +224,13 @@ function nextR(){
   $("rqNum").textContent=`${idx+1} / ${deck.length}`;
   rBoard.setInteractive(false);
   rBoard.set(cur.fen,{last:cur.last});
-  const mv=$("rMoves"); mv.innerHTML=moveText(cur.moves); mv.classList.toggle("hide",!$("optMoves").checked);
+  const mv=$("rMoves"); mv.innerHTML=moveText(cur.moves); mv.classList.toggle("hide",!R.moves);
+  clearBigVerdict($("rboard"));
   $("rMem").style.display=""; $("rPlay").style.display="none"; $("rNext").style.display="none";
   if(document.activeElement && document.activeElement.blur) document.activeElement.blur();   // a hidden button mustn't keep the keyboard
   $("rTimer").style.visibility="visible";
   updStats();
-  state="memorize"; t0=performance.now(); deadline=t0+S.time*1000;
+  state="memorize"; t0=performance.now(); deadline=t0+R.time*1000;
   cancelAnimationFrame(raf); tickR();
 }
 function tickR(){
@@ -241,6 +256,9 @@ function startRebuildPhase(){
 function finishR(s){
   state="done";
   const pts=s.firstTry/s.n;
+  marks.push(pts);
+  if(s.perfect){ SFX.perfect(); bigVerdict($("rboard"),"perfect","Perfect!",`all ${s.n} moves`); }
+  else { (pts>=.5?SFX.half:SFX.bad)(); bigVerdict($("rboard"),pts>=.5?"half":"bad",`${s.firstTry}/${s.n} moves`,s.gaveUp?"gave up":"first try"); }
   score+=pts; rbStats.firstTry+=s.firstTry; rbStats.total+=s.n; rbStats.hints+=s.hints; rbStats.mistakes+=s.mistakes;
   if(s.perfect){ rbStats.perfect++; streak++; bestStreak=Math.max(bestStreak,streak); }
   else { streak=0; review.push({o:cur, rb:`${s.firstTry}/${s.n} moves first try${s.gaveUp?" (gave up)":""}`}); }
@@ -274,6 +292,12 @@ function endRun(){
   stopVoice(); whisperStop(); state="idle";
   show("results");
   const played=Math.min(idx,deck.length);
+  // openings you never got to count as misses in the share grid
+  while(marks.length<deck.length) marks.push(R.mode==="rebuild"?0:"bad");
+  const result={score, marks:marks.slice(), avg: times.length? times.reduce((a,b)=>a+b,0)/times.length : 0};
+  if(R.kind==="daily") store.set("daily:"+R.day, result);
+  showShare(R, result);
+  renderDailyCard();
   const big=$("rBig"), m=$("missed");
   if(runMode==="rebuild"){
     const pct=rbStats.total?Math.round(rbStats.firstTry/rbStats.total*100):0;
@@ -287,4 +311,81 @@ function endRun(){
     <div>Best streak<b>${bestStreak}</b></div><div>Avg answer time<b>${times.length?(times.reduce((a,b)=>a+b,0)/times.length).toFixed(2)+"s":"–"}</b></div>`;
   m.innerHTML = review.length ? review.map(r=>`<div><b>${r.o.name}</b><div class="mv">${r.o.moves.join(" ")}</div>${r.you?`<div class="you">you said: ${r.you.replace(/</g,"&lt;")}</div>`:""}</div>`).join("")
     : `<div style="color:var(--good)">Nothing missed. Try a shorter timer.</div>`;
+}
+
+/* ---------- sharing a finished run ---------- */
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function copyText(text){
+  if(navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta); ta.select();
+  try{ document.execCommand("copy"); }finally{ ta.remove(); } return Promise.resolve();
+}
+function showShare(cfg, r){
+  const box=$("shareBox"), text=shareText(cfg,r), msg=t=>{ $("shMsg").textContent=t; };
+  let beat="";
+  if(cfg.kind==="challenge" && cfg.target!=null){
+    const t=fmtScore(cfg.target);
+    beat = r.score>cfg.target ? `🎉 You beat their ${t}/${cfg.len}!` : r.score===cfg.target ? `🤝 Tied with their ${t}/${cfg.len}.` : `😬 They got ${t}/${cfg.len}. So close.`;
+  }
+  box.innerHTML=`${beat?`<div class="beat">${beat}</div>`:""}
+    <pre class="sharetext">${esc(text)}</pre>
+    <div class="btns">
+      <button class="btn primary" id="shCopy">📋 Copy result</button>
+      ${navigator.share?'<button class="btn" id="shShare">📤 Share</button>':""}
+      <button class="btn" id="shImg">🖼️ Save image</button>
+      <button class="btn" id="shChal">🎯 Challenge a friend</button>
+    </div><div class="dim small" id="shMsg"></div>`;
+  $("shCopy").onclick=()=>copyText(text).then(()=>msg("Copied! Paste it anywhere."),()=>msg("Couldn't copy. Select the text above instead."));
+  $("shChal").onclick=()=>copyText(challengeLink(cfg,r.score)).then(()=>msg("Challenge link copied. Send it to a friend: they get the exact same openings."));
+  $("shImg").onclick=async()=>{
+    const blob=await canvasBlob(shareImage(cfg,r)), a=document.createElement("a");
+    a.href=URL.createObjectURL(blob); a.download=`opening-flash-${cfg.kind==="daily"?"daily-"+cfg.number:fmtScore(r.score)}.png`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    msg("Image saved.");
+  };
+  if($("shShare")) $("shShare").onclick=async()=>{
+    try{
+      const file=new File([await canvasBlob(shareImage(cfg,r))],"opening-flash.png",{type:"image/png"});
+      if(navigator.canShare && navigator.canShare({files:[file]})) await navigator.share({files:[file], text});
+      else await navigator.share({text});
+    }catch(e){ if(e && e.name!=="AbortError") msg("Couldn't open sharing. Use Copy instead."); }
+  };
+}
+
+/* ---------- the daily challenge card (top of the start screen) ---------- */
+let dailyTimer=0;
+function renderDailyCard(){
+  const cfg=dailyConfig(), res=dailyResult(cfg.day), el=$("dailyCard");
+  clearInterval(dailyTimer);
+  if(res){
+    const played = res.marks ? `${res.marks.map(markEmoji).join("")} <b>${fmtScore(res.score)}/${res.marks.length}</b>` : `started but not finished (one try a day)`;
+    el.innerHTML=`<div class="dtitle">📅 Daily #${cfg.number} <span class="dim">· done</span></div>
+      <div class="dline">${played}</div>
+      <div class="dim small">Next daily in <span id="dCount">${hms(msToMidnight())}</span></div>
+      ${res.marks?'<div class="btns"><button class="btn" id="dShare">Share my result</button></div>':""}`;
+    if(res.marks) $("dShare").onclick=()=>{ show("results"); showShare(cfg,res); $("rBig").innerHTML=`<div>Daily #${cfg.number}<b>${fmtScore(res.score)} / ${res.marks.length}</b></div>`; $("missed").innerHTML=""; };
+    dailyTimer=setInterval(()=>{ const ms=msToMidnight(); if($("dCount")) $("dCount").textContent=hms(ms); if(ms<1000) setTimeout(renderDailyCard,1500); },1000);
+  } else {
+    el.innerHTML=`<div class="dtitle">📅 Daily #${cfg.number}</div>
+      <div class="dline">The same 10 openings for everyone today. Name it · 10 s · Popular · one try.</div>
+      <div class="btns"><button class="btn primary" id="dPlay">Play today's daily ▶</button></div>`;
+    $("dPlay").onclick=()=>startRun(dailyConfig());
+  }
+}
+function showDaily(){ show("start"); $("stats").style.display="none"; renderDailyCard(); $("dailyCard").scrollIntoView({block:"nearest"}); }
+renderDailyCard();
+
+/* ---------- opening a challenge link ---------- */
+function showChallenge(cfg){
+  pendingChallenge=cfg;
+  const b=$("chBanner");
+  const desc=`${cfg.mode==="rebuild"?"Rebuild it":"Name it"} · ${cfg.time} s${cfg.flash?" · flash":""} · ${cfg.set==="lichess"?"Lichess":"Popular"}${cfg.pool==="main"?" (main openings)":""} · ${cfg.len} openings`;
+  b.innerHTML=`<div class="dtitle">🎯 You've been challenged</div>
+    <div class="dline">${esc(desc)}${cfg.target!=null?` · score to beat: <b>${fmtScore(cfg.target)}/${cfg.len}</b>`:""}</div>
+    <div class="dim small">Same openings, same order as whoever sent it. Your own settings below don't apply.</div>
+    <div class="btns"><button class="btn primary" id="chPlay">Play the challenge ▶</button><button class="btn" id="chNo">No thanks</button></div>`;
+  b.style.display="";
+  $("chPlay").onclick=()=>{ b.style.display="none"; startRun(cfg); };
+  $("chNo").onclick=()=>{ b.style.display="none"; pendingChallenge=null; };
+  show("start"); $("stats").style.display="none";
 }

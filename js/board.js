@@ -4,7 +4,7 @@ const FILES = "abcdefgh";
 // piece images: "Chessnut" by Alexis Luengas, Apache 2.0 (see img/pieces/README.txt)
 const pieceImg = p => `url(img/pieces/${p===p.toUpperCase()?"w":"b"}${p.toUpperCase()}.svg)`;
 // load all 12 up front so the first flashed position doesn't pop in piece by piece
-"KQRBNPkqrbnp".split("").forEach(p=>{ const im=new Image(); im.src=pieceImg(p).slice(4,-1); });
+if(typeof Image!=="undefined") "KQRBNPkqrbnp".split("").forEach(p=>{ const im=new Image(); im.src=pieceImg(p).slice(4,-1); });
 
 function parseFen(fen){
   const pos={};

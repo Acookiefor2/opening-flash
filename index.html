@@ -32,6 +32,10 @@
       <a href="#study">Study</a>
       <a href="#rebuild">Rebuild</a>
     </nav>
+    <div class="toggles">
+      <button class="btn icon" id="btnSound" aria-pressed="false" title="Sound effects">🔇</button>
+      <button class="btn" id="btnStreamer" aria-pressed="false" title="Bigger board, big verdicts, no debug text">📺 Streamer</button>
+    </div>
     <div class="stats" id="stats" style="display:none">
       <div>Score<b id="sScore">0</b></div>
       <div>Streak<b id="sStreak">0</b></div>
@@ -44,6 +48,8 @@
 
   <!-- START -->
   <section class="screen on" id="start">
+    <div class="card daily chbanner" id="chBanner" style="display:none"></div>
+    <div class="card daily" id="dailyCard"></div>
     <div class="card">
       <div class="row">
         <label class="t">Challenge</label>
@@ -183,6 +189,7 @@
     <div class="card">
       <h2>Run finished</h2>
       <div class="big" id="rBig"></div>
+      <div class="share" id="shareBox"></div>
       <h2 style="font-size:16px;margin-bottom:8px">To review</h2>
       <div class="missed" id="missed"></div>
       <button class="go" id="btnAgain">Play again</button>
@@ -265,7 +272,9 @@
   document.getElementById("frPanel").innerHTML = rebuildPanelHTML("fr");
   document.getElementById("trPanel").innerHTML = rebuildPanelHTML("tr");
 </script>
+<script src="js/challenge.js"></script>
 <script src="js/flash.js"></script>
+<script src="js/streamer.js"></script>
 <script src="js/voice.js"></script>
 <script src="js/whisper.js"></script>
 <script src="js/training.js"></script>
